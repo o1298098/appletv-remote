@@ -1,0 +1,9 @@
+.git
+.gitignore
+**/.venv
+**/node_modules
+frontend/dist
+backend/pyatv.json
+**/__pycache__
+*.pyc
+.cursor

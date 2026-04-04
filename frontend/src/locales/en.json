@@ -1,0 +1,91 @@
+{
+  "common": {
+    "language": "Language"
+  },
+  "app": {
+    "title": "Apple TV Remote",
+    "subtitle": "Control Apple TV on your local network",
+    "documentTitle": "Apple TV Remote"
+  },
+  "language": {
+    "pickerTitle": "Display language",
+    "zh": "简体中文",
+    "en": "English"
+  },
+  "theme": {
+    "menu": "Appearance",
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark"
+  },
+  "backend": {
+    "unreachable": "Cannot reach the backend. In the <folder>backend</folder> folder, run: <cmd>uvicorn main:app --host 127.0.0.1 --port 8765</cmd>"
+  },
+  "device": {
+    "current": "Current device",
+    "selectAtv": "Select Apple TV…",
+    "pickAtv": "Choose Apple TV",
+    "chooseSheetTitle": "Choose device",
+    "selectInDialog": "Select device",
+    "paired": "Paired",
+    "notPaired": "Not paired",
+    "emptyList": "No devices yet — scan first"
+  },
+  "actions": {
+    "more": "More",
+    "moreAria": "More: scan, pair, disconnect",
+    "scan": "Scan",
+    "pair": "Pair",
+    "disconnect": "Disconnect",
+    "cancel": "Cancel"
+  },
+  "card": {
+    "remoteTitle": "Remote",
+    "noSelectionHint": "Tap Scan, then choose an Apple TV to control",
+    "up": "Up",
+    "down": "Down",
+    "left": "Left",
+    "right": "Right",
+    "select": "OK",
+    "menu": "Menu",
+    "play": "Play",
+    "home": "Home",
+    "titleDpad": "Tap: click · Hold: press and hold",
+    "titleMenu": "Tap: Menu · Hold: press and hold Menu",
+    "titlePlayPause": "Play / Pause",
+    "titleHome": "Tap: Home · Hold: press and hold Home",
+    "ariaVolumeDown": "Volume down",
+    "ariaVolumeUp": "Volume up",
+    "ariaSkipBack": "Skip back",
+    "ariaSkipForward": "Skip forward"
+  },
+  "pair": {
+    "dialogTitle": "Pair Apple TV",
+    "description": "On tvOS 15+, the remote relies heavily on <strong>Companion</strong>. If only AirPlay was paired, the Select button may not work. Follow the on-screen prompts once to pair.",
+    "deviceLabel": "Device",
+    "start": "Start pairing",
+    "pinHint": "Enter the PIN shown on your TV below, then tap Submit and finish.",
+    "pinPlaceholder": "PIN",
+    "submitFinish": "Submit and finish",
+    "enterOnTv": "Enter on Apple TV",
+    "finishHint": "After entering the PIN on the TV, tap Finish pairing below.",
+    "finish": "Finish pairing",
+    "chooseDeviceFirst": "Choose a device to pair"
+  },
+  "toast": {
+    "noDevicesTitle": "No devices found",
+    "noDevicesDesc": "Make sure your Apple TV is on the same network as this computer and awake.",
+    "devicesFound": "Found {{count}} device(s)",
+    "scanFailed": "Scan failed",
+    "selectAtvFirst": "Select an Apple TV first",
+    "sendFailed": "Send failed",
+    "disconnected": "Disconnected",
+    "disconnectFailed": "Disconnect failed",
+    "pairStarted": "Pairing started",
+    "pairProtocol": "Protocol: {{protocol}}",
+    "pairStartFailed": "Could not start pairing",
+    "pairSuccess": "Paired successfully",
+    "pairIncomplete": "Pairing incomplete — try again",
+    "pairFailed": "Pairing failed"
+  }
+}

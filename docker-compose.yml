@@ -1,0 +1,24 @@
+# 用法：在项目根目录执行  docker compose up --build
+# 浏览器访问 http://localhost:8765
+#
+# 若在 Linux 上扫描不到局域网内的 Apple TV，可改为使用宿主机网络（与 ports 二选一）：
+#   services:
+#     atv-remote:
+#       network_mode: host
+#       # 去掉 ports；访问 http://127.0.0.1:8765
+
+services:
+  atv-remote:
+    build: .
+    ports:
+      - "8765:8765"
+    volumes:
+      - pyatv-data:/data
+    environment:
+      PYATV_STORAGE: /data/pyatv.json
+      ATV_STATIC_DIR: /app/static
+      # 前端与 API 同源时 CORS 可不设；跨域调试可写：ATV_CORS_ORIGINS=http://127.0.0.1:3000
+      # ATV_CORS_ORIGINS: "*"
+
+volumes:
+  pyatv-data:

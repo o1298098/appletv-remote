@@ -1,0 +1,5 @@
+# Windows：miniaudio 对 3.13+ 常无预编译 wheel，易触发 MSVC 编译错误。
+# 建议用 Python 3.12 虚拟环境，或安装 Visual C++ Build Tools。详见 WINDOWS_SETUP.txt
+pyatv>=0.14.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0

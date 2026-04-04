@@ -1,0 +1,91 @@
+{
+  "common": {
+    "language": "界面语言"
+  },
+  "app": {
+    "title": "Apple TV 遥控",
+    "subtitle": "仅遥控 Apple TV（局域网）",
+    "documentTitle": "Apple TV 遥控"
+  },
+  "language": {
+    "pickerTitle": "界面语言",
+    "zh": "简体中文",
+    "en": "English"
+  },
+  "theme": {
+    "menu": "外观",
+    "system": "跟随系统",
+    "light": "浅色",
+    "dark": "深色"
+  },
+  "backend": {
+    "unreachable": "无法连接后端，请在 <folder>backend</folder> 目录运行 <cmd>uvicorn main:app --host 127.0.0.1 --port 8765</cmd>"
+  },
+  "device": {
+    "current": "当前设备",
+    "selectAtv": "选择 Apple TV…",
+    "pickAtv": "点选 Apple TV",
+    "chooseSheetTitle": "选择设备",
+    "selectInDialog": "选择设备",
+    "paired": "已配对",
+    "notPaired": "未配对",
+    "emptyList": "暂无设备，请先扫描"
+  },
+  "actions": {
+    "more": "更多",
+    "moreAria": "更多：扫描、配对、断开",
+    "scan": "扫描",
+    "pair": "配对",
+    "disconnect": "断开",
+    "cancel": "取消"
+  },
+  "card": {
+    "remoteTitle": "遥控器",
+    "noSelectionHint": "先点「扫描」，再选择要控制的 Apple TV",
+    "up": "上",
+    "down": "下",
+    "left": "左",
+    "right": "右",
+    "select": "确认",
+    "menu": "菜单",
+    "play": "播放",
+    "home": "主屏幕",
+    "titleDpad": "短按：点按 · 长按：按住",
+    "titleMenu": "短按：菜单 · 长按：按住菜单",
+    "titlePlayPause": "播放 / 暂停",
+    "titleHome": "短按：主屏幕 · 长按：按住主屏幕键",
+    "ariaVolumeDown": "音量减",
+    "ariaVolumeUp": "音量加",
+    "ariaSkipBack": "快退",
+    "ariaSkipForward": "快进"
+  },
+  "pair": {
+    "dialogTitle": "配对 Apple TV",
+    "description": "tvOS 15+ 上遥控多依赖 <strong>Companion</strong>；若只配对了 AirPlay，确认键可能无效。按电视提示完成一次配对即可。",
+    "deviceLabel": "设备",
+    "start": "开始配对",
+    "pinHint": "电视上显示的 PIN 请输入到下方，然后点击完成。",
+    "pinPlaceholder": "PIN",
+    "submitFinish": "提交并完成",
+    "enterOnTv": "请在电视上输入",
+    "finishHint": "在电视上输入上述 PIN 后，点击下方完成配对。",
+    "finish": "完成配对",
+    "chooseDeviceFirst": "请选择要配对的设备"
+  },
+  "toast": {
+    "noDevicesTitle": "未发现设备",
+    "noDevicesDesc": "请确认 Apple TV 与电脑在同一局域网并已唤醒。",
+    "devicesFound": "发现 {{count}} 台设备",
+    "scanFailed": "扫描失败",
+    "selectAtvFirst": "请先选择一台 Apple TV",
+    "sendFailed": "发送失败",
+    "disconnected": "已断开连接",
+    "disconnectFailed": "断开失败",
+    "pairStarted": "配对已开始",
+    "pairProtocol": "协议: {{protocol}}",
+    "pairStartFailed": "无法开始配对",
+    "pairSuccess": "配对成功",
+    "pairIncomplete": "配对未完成，请重试",
+    "pairFailed": "配对失败"
+  }
+}
