@@ -5,9 +5,7 @@ async function parseError(res: Response): Promise<string> {
     const j = (await res.json()) as { detail?: string | { msg: string }[] }
     if (typeof j.detail === "string") return j.detail
     if (Array.isArray(j.detail)) return j.detail.map((x) => x.msg).join("; ")
-  } catch {
-    /* ignore */
-  }
+  } catch {}
   return res.statusText || `HTTP ${res.status}`
 }
 
@@ -31,7 +29,7 @@ export async function scanDevices(): Promise<AtvDevice[]> {
 export async function sendRemote(
   identifier: string,
   command: string,
-  options?: { action?: string },
+  options?: { action?: string; position_sec?: number },
 ): Promise<void> {
   const res = await fetch(`/api/devices/${encodeURIComponent(identifier)}/remote`, {
     method: "POST",
@@ -39,6 +37,7 @@ export async function sendRemote(
     body: JSON.stringify({
       command,
       action: options?.action,
+      position_sec: options?.position_sec,
     }),
   })
   if (!res.ok) throw new Error(await parseError(res))
@@ -104,4 +103,43 @@ export async function healthCheck(): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+export type PlayingAppInfo = {
+  name: string | null
+  identifier: string
+}
+
+export type PlayingSnapshot = {
+  supported: boolean
+  detail?: string | null
+  app?: PlayingAppInfo | null
+  media_type?: string | null
+  device_state?: string | null
+  title?: string | null
+  artist?: string | null
+  album?: string | null
+  genre?: string | null
+  series_name?: string | null
+  season_number?: number | null
+  episode_number?: number | null
+  position_sec?: number | null
+  total_time_sec?: number | null
+  hint?: string | null
+}
+
+export async function fetchPlaying(identifier: string): Promise<PlayingSnapshot> {
+  const res = await fetch(
+    `/api/devices/${encodeURIComponent(identifier)}/playing`,
+  )
+  if (!res.ok) throw new Error(await parseError(res))
+  return res.json() as Promise<PlayingSnapshot>
+}
+
+export function playingArtworkUrl(
+  identifier: string,
+  cacheKey: number,
+  widthPx = 480,
+): string {
+  return `/api/devices/${encodeURIComponent(identifier)}/playing/artwork?w=${widthPx}&v=${cacheKey}`
 }

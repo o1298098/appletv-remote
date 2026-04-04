@@ -1,18 +1,12 @@
 import React, { useCallback, useRef } from "react"
 
-/** 超过该时间视为长按，发送 pyatv 的 Hold */
 const LONG_PRESS_MS = 450
 
 export type RemotePush = (
   command: string,
-  extra?: { action?: string },
+  extra?: { action?: string; position_sec?: number },
 ) => void | Promise<void>
 
-/**
- * 短按：在 pointerup 时发单次点击（默认 SingleTap）。
- * 长按：按住超过 LONG_PRESS_MS 后发 action: hold（对应 pyatv InputAction.Hold）。
- * 用 ignoreClick 避免鼠标/触摸在 pointerup 后再触发一次 click 导致双击。
- */
 export function useRemotePressHandlers(
   push: RemotePush,
   command: string,
@@ -53,9 +47,7 @@ export function useRemotePressHandlers(
       clearLongTimer()
       try {
         e.currentTarget.releasePointerCapture(e.pointerId)
-      } catch {
-        /* 未 capture 时忽略 */
-      }
+      } catch {}
       if (disabled || !supportsHold) return
       const elapsed = Date.now() - downAtRef.current
       if (!longFiredRef.current && elapsed < LONG_PRESS_MS) {
@@ -73,9 +65,7 @@ export function useRemotePressHandlers(
       longFiredRef.current = false
       try {
         e.currentTarget.releasePointerCapture(e.pointerId)
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     },
     [clearLongTimer],
   )

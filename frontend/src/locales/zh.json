@@ -37,7 +37,26 @@
     "scan": "扫描",
     "pair": "配对",
     "disconnect": "断开",
-    "cancel": "取消"
+    "cancel": "取消",
+    "tvPower": "开关电视",
+    "tvPowerAria": "打开或关闭 Apple TV"
+  },
+  "playing": {
+    "loading": "正在获取播放信息…",
+    "unavailable": "无法读取播放内容与进度。请确认已完成配对；tvOS 15+ 上通常需要 AirPlay/MRP 隧道。",
+    "fetchFailed": "暂时无法连接设备以读取播放状态。",
+    "idle": "当前没有正在播放的媒体",
+    "unknownTitle": "未命名内容",
+    "appLabel": "应用",
+    "seekAria": "拖动调整播放进度",
+    "state": {
+      "Idle": "空闲",
+      "Loading": "加载中",
+      "Paused": "已暂停",
+      "Playing": "播放中",
+      "Stopped": "已停止",
+      "Seeking": "跳转中"
+    }
   },
   "card": {
     "remoteTitle": "遥控器",
@@ -47,11 +66,11 @@
     "left": "左",
     "right": "右",
     "select": "确认",
-    "menu": "菜单",
+    "back": "后退",
     "play": "播放",
     "home": "主屏幕",
     "titleDpad": "短按：点按 · 长按：按住",
-    "titleMenu": "短按：菜单 · 长按：按住菜单",
+    "titleBack": "短按：后退 · 长按：按住",
     "titlePlayPause": "播放 / 暂停",
     "titleHome": "短按：主屏幕 · 长按：按住主屏幕键",
     "ariaVolumeDown": "音量减",
@@ -61,7 +80,7 @@
   },
   "pair": {
     "dialogTitle": "配对 Apple TV",
-    "description": "tvOS 15+ 上遥控多依赖 <strong>Companion</strong>；若只配对了 AirPlay，确认键可能无效。按电视提示完成一次配对即可。",
+    "description": "tvOS 15+ 上遥控多依赖 <strong>Companion</strong>；若只配对了 AirPlay，确认键可能无效。要显示「正在播放」还需 <strong>AirPlay</strong>（或 MRP）凭据——若已有 Companion，再点配对会优先引导未保存的协议（常为 AirPlay）。",
     "deviceLabel": "设备",
     "start": "开始配对",
     "pinHint": "电视上显示的 PIN 请输入到下方，然后点击完成。",

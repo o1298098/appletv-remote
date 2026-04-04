@@ -37,7 +37,26 @@
     "scan": "Scan",
     "pair": "Pair",
     "disconnect": "Disconnect",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "tvPower": "TV power",
+    "tvPowerAria": "Turn Apple TV on or off"
+  },
+  "playing": {
+    "loading": "Loading playback info…",
+    "unavailable": "Playback info isn’t available. Pairing must be complete; on tvOS 15+ the media protocol (AirPlay / MRP tunnel) is usually required.",
+    "fetchFailed": "Could not read playback state from the device.",
+    "idle": "Nothing is playing",
+    "unknownTitle": "Untitled",
+    "appLabel": "App",
+    "seekAria": "Drag to seek playback position",
+    "state": {
+      "Idle": "Idle",
+      "Loading": "Loading",
+      "Paused": "Paused",
+      "Playing": "Playing",
+      "Stopped": "Stopped",
+      "Seeking": "Seeking"
+    }
   },
   "card": {
     "remoteTitle": "Remote",
@@ -47,11 +66,11 @@
     "left": "Left",
     "right": "Right",
     "select": "OK",
-    "menu": "Menu",
+    "back": "Back",
     "play": "Play",
     "home": "Home",
     "titleDpad": "Tap: click · Hold: press and hold",
-    "titleMenu": "Tap: Menu · Hold: press and hold Menu",
+    "titleBack": "Tap: Back · Hold: press and hold",
     "titlePlayPause": "Play / Pause",
     "titleHome": "Tap: Home · Hold: press and hold Home",
     "ariaVolumeDown": "Volume down",
@@ -61,7 +80,7 @@
   },
   "pair": {
     "dialogTitle": "Pair Apple TV",
-    "description": "On tvOS 15+, the remote relies heavily on <strong>Companion</strong>. If only AirPlay was paired, the Select button may not work. Follow the on-screen prompts once to pair.",
+    "description": "On tvOS 15+, the remote relies heavily on <strong>Companion</strong>. If only AirPlay was paired, Select may not work. <strong>Now playing</strong> needs <strong>AirPlay</strong> (or MRP) credentials too—if Companion is already saved, start pairing again and you should be prompted for the missing protocol (often AirPlay).",
     "deviceLabel": "Device",
     "start": "Start pairing",
     "pinHint": "Enter the PIN shown on your TV below, then tap Submit and finish.",

@@ -5,7 +5,6 @@ import zh from "@/locales/zh.json"
 
 export const LOCALE_STORAGE_KEY = "atv-remote-locale"
 
-/** 应用支持的语言；其余系统语言首次进入时回落到英语 */
 export const SUPPORTED_LOCALES = ["zh", "en"] as const
 export type AppLocale = (typeof SUPPORTED_LOCALES)[number]
 
@@ -20,9 +19,7 @@ function detectLng(): AppLocale {
   try {
     const s = localStorage.getItem(LOCALE_STORAGE_KEY)
     if (s === "en" || s === "zh") return s
-  } catch {
-    /* ignore */
-  }
+  } catch {}
   return systemPreferredLocale()
 }
 
