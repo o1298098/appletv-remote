@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 
+/** 与 `size-3.5` 一致，圆点居中后左右各留一半宽度以免被 overflow 裁切 */
+const THUMB_PX = 14
+const THUMB_HALF = THUMB_PX / 2
+
 export function PlayingSeekBar({
   positionSec,
   totalSec,
@@ -61,9 +65,10 @@ export function PlayingSeekBar({
       const el = trackRef.current
       if (!el || totalSec <= 0) return scrubRef.current
       const rect = el.getBoundingClientRect()
-      const w = rect.width
+      const w = rect.width - THUMB_PX
       if (w <= 0) return scrubRef.current
-      const r = (clientX - rect.left) / w
+      const x = clientX - rect.left - THUMB_HALF
+      const r = x / w
       return Math.min(totalSec, Math.max(0, Math.round(r * totalSec)))
     },
     [totalSec],
@@ -76,6 +81,8 @@ export function PlayingSeekBar({
   }
 
   const pct = Math.min(100, Math.max(0, (scrub / totalSec) * 100))
+  const thumbLeft = `calc(${THUMB_HALF}px + (100% - ${THUMB_PX}px) * ${pct} / 100)`
+  const fillWidth = `calc(${THUMB_HALF}px + (100% - ${THUMB_PX}px) * ${pct} / 100)`
 
   const endGesture = (
     ev: React.PointerEvent<HTMLDivElement>,
@@ -185,7 +192,7 @@ export function PlayingSeekBar({
       />
       <div
         className="pointer-events-none absolute top-1/2 left-0 h-0.5 max-w-full -translate-y-1/2 rounded-full bg-foreground/70 dark:bg-foreground/80"
-        style={{ width: `${pct}%` }}
+        style={{ width: fillWidth }}
         aria-hidden
       />
       <div
@@ -193,7 +200,7 @@ export function PlayingSeekBar({
           "border-background bg-foreground pointer-events-none absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-sm transition-opacity duration-150",
           dragging ? "opacity-100" : "opacity-65",
         )}
-        style={{ left: `${pct}%` }}
+        style={{ left: thumbLeft }}
         aria-hidden
       />
     </div>

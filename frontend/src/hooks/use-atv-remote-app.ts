@@ -6,6 +6,7 @@ import {
   disconnectDevice,
   fetchPlaying,
   healthCheck,
+  playingStreamUrl,
   pairBegin,
   pairCancel,
   pairFinish,
@@ -13,8 +14,27 @@ import {
   scanDevices,
   sendRemote,
 } from "@/lib/api"
-import { resolveSelectedAfterScan } from "@/lib/atv-device-utils"
+import {
+  findDeviceByIdentifier,
+  resolveSelectedAfterScan,
+} from "@/lib/atv-device-utils"
 import { PLAYING_FETCH_FAILED_MARKER, STORAGE_KEY } from "@/lib/atv-remote-constants"
+
+/** SSE 推送里常不含 app，合并时保留上次 REST 拉到的应用信息。 */
+function mergePlayingSnapshot(
+  prev: PlayingSnapshot | null,
+  incoming: PlayingSnapshot,
+): PlayingSnapshot {
+  return {
+    ...incoming,
+    app: incoming.app ?? prev?.app,
+  }
+}
+
+/** 无 SSE 或长时间收不到流时的 REST 轮询间隔（秒）。 */
+const PLAYING_FALLBACK_POLL_SEC = 6
+/** 已建立 EventSource 后若这么久仍无首条 data，则改用 REST 轮询。 */
+const PLAYING_SSE_STALL_MS = 5000
 
 export function useAtvRemoteApp() {
   const { t, i18n } = useTranslation()
@@ -42,7 +62,7 @@ export function useAtvRemoteApp() {
   const [playingSnap, setPlayingSnap] = useState<PlayingSnapshot | null>(null)
   const [playingInitial, setPlayingInitial] = useState(true)
 
-  const selected = devices.find((d) => d.identifier === selectedId)
+  const selected = findDeviceByIdentifier(devices, selectedId)
   const selectedIsPaired = Boolean(
     selected?.mrp_credentials || selected?.companion_credentials,
   )
@@ -118,13 +138,17 @@ export function useAtvRemoteApp() {
     setPlayingSnap(null)
     setPlayingInitial(true)
     let cancelled = false
-    const tick = async () => {
+
+    const applySnapshot = (s: PlayingSnapshot) => {
+      if (cancelled) return
+      setPlayingSnap((prev) => mergePlayingSnapshot(prev, s))
+      setPlayingInitial(false)
+    }
+
+    const reconcile = async () => {
       try {
         const s = await fetchPlaying(selectedId)
-        if (!cancelled) {
-          setPlayingSnap(s)
-          setPlayingInitial(false)
-        }
+        applySnapshot(s)
       } catch {
         if (!cancelled) {
           setPlayingInitial(false)
@@ -137,11 +161,64 @@ export function useAtvRemoteApp() {
         }
       }
     }
-    void tick()
-    const id = window.setInterval(tick, 2500)
+
+    let pollId: ReturnType<typeof window.setInterval> | undefined
+    let stallTimer: ReturnType<typeof window.setTimeout> | undefined
+    let sseReceived = false
+
+    const clearPoll = () => {
+      if (pollId != null) {
+        window.clearInterval(pollId)
+        pollId = undefined
+      }
+    }
+
+    const startRestPolling = (runImmediate: boolean) => {
+      if (pollId != null) return
+      if (runImmediate) void reconcile()
+      pollId = window.setInterval(
+        () => void reconcile(),
+        PLAYING_FALLBACK_POLL_SEC * 1000,
+      )
+    }
+
+    let es: EventSource | null = null
+    if (typeof EventSource !== "undefined") {
+      try {
+        es = new EventSource(playingStreamUrl(selectedId))
+        es.onmessage = (ev) => {
+          sseReceived = true
+          if (stallTimer != null) {
+            window.clearTimeout(stallTimer)
+            stallTimer = undefined
+          }
+          clearPoll()
+          try {
+            const s = JSON.parse(ev.data) as PlayingSnapshot
+            applySnapshot(s)
+          } catch {
+            /* 忽略畸形帧 */
+          }
+        }
+        stallTimer = window.setTimeout(() => {
+          stallTimer = undefined
+          if (cancelled || sseReceived) return
+          startRestPolling(true)
+        }, PLAYING_SSE_STALL_MS)
+      } catch {
+        es = null
+      }
+    }
+
+    if (!es) {
+      startRestPolling(true)
+    }
+
     return () => {
       cancelled = true
-      window.clearInterval(id)
+      if (stallTimer != null) window.clearTimeout(stallTimer)
+      clearPoll()
+      es?.close()
     }
   }, [selectedId, selectedIsPaired])
 
@@ -188,19 +265,19 @@ export function useAtvRemoteApp() {
     }
   }, [selectedId, t])
 
-  const resetPairUi = () => {
+  const resetPairUi = useCallback(() => {
     setPairSession(null)
     setPairTvProvides(false)
     setPairEnterOnTv(null)
     setPairPinInput("")
     setPairBusy(false)
-  }
+  }, [])
 
-  const openPairDialog = () => {
+  const openPairDialog = useCallback(() => {
     resetPairUi()
     setPairDeviceId(selectedId || devices[0]?.identifier || "")
     setPairOpen(true)
-  }
+  }, [devices, resetPairUi, selectedId])
 
   const closePairDialog = () => {
     if (pairSession) void pairCancel(pairSession)
@@ -208,26 +285,44 @@ export function useAtvRemoteApp() {
     setPairOpen(false)
   }
 
-  const startPair = async () => {
-    if (!pairDeviceId) {
-      toast.error(t("pair.chooseDeviceFirst"))
-      return
-    }
-    setPairBusy(true)
-    try {
-      const r = await pairBegin(pairDeviceId)
-      setPairSession(r.session_id)
-      setPairTvProvides(r.device_provides_pin)
-      setPairEnterOnTv(r.enter_on_tv_pin)
-      toast.message(t("toast.pairStarted"), {
-        description: t("toast.pairProtocol", { protocol: r.protocol }),
-      })
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("toast.pairStartFailed"))
-    } finally {
-      setPairBusy(false)
-    }
-  }
+  const startPairWithDeviceId = useCallback(
+    async (id: string) => {
+      if (!id) {
+        toast.error(t("pair.chooseDeviceFirst"))
+        return
+      }
+      setPairBusy(true)
+      try {
+        const r = await pairBegin(id)
+        setPairSession(r.session_id)
+        setPairTvProvides(r.device_provides_pin)
+        setPairEnterOnTv(r.enter_on_tv_pin)
+        toast.message(t("toast.pairStarted"), {
+          description: t("toast.pairProtocol", { protocol: r.protocol }),
+        })
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : t("toast.pairStartFailed"))
+      } finally {
+        setPairBusy(false)
+      }
+    },
+    [t],
+  )
+
+  const startPair = useCallback(async () => {
+    await startPairWithDeviceId(pairDeviceId)
+  }, [pairDeviceId, startPairWithDeviceId])
+
+  const openPairDialogAndStartPairing = useCallback(
+    async (deviceId: string) => {
+      resetPairUi()
+      setPairDeviceId(deviceId)
+      setSelectedId(deviceId)
+      setPairOpen(true)
+      await startPairWithDeviceId(deviceId)
+    },
+    [resetPairUi, startPairWithDeviceId],
+  )
 
   const completePairFromTv = async () => {
     if (!pairSession) return
@@ -277,6 +372,7 @@ export function useAtvRemoteApp() {
     push,
     handleDisconnect,
     openPairDialog,
+    openPairDialogAndStartPairing,
     closePairDialog,
     startPair,
     completePairFromTv,

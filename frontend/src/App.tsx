@@ -61,6 +61,7 @@ export default function App() {
     push,
     handleDisconnect,
     openPairDialog,
+    openPairDialogAndStartPairing,
     closePairDialog,
     startPair,
     completePairFromTv,
@@ -94,6 +95,7 @@ export default function App() {
         credLabelFor={credLabelFor}
         handleScan={handleScan}
         openPairDialog={openPairDialog}
+        openPairDialogAndStartPairing={openPairDialogAndStartPairing}
         handleDisconnect={handleDisconnect}
         mobileSheetOpen={mobileSheetOpen}
         setMobileSheetOpen={setMobileSheetOpen}

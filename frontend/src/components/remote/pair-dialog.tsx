@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { AtvDevice } from "@/lib/api"
+import { findDeviceByIdentifier } from "@/lib/atv-device-utils"
 
 export function PairDialog({
   open,
@@ -73,7 +74,17 @@ export function PairDialog({
                 onValueChange={(v) => onPairDeviceIdChange(v ?? "")}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t("device.selectInDialog")} />
+                  <SelectValue placeholder={t("device.selectInDialog")}>
+                    {(() => {
+                      const d = findDeviceByIdentifier(devices, pairDeviceId)
+                      if (d) return d.name
+                      if (pairDeviceId)
+                        return (
+                          <span className="text-muted-foreground">…</span>
+                        )
+                      return undefined
+                    })()}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {devices.map((d) => (

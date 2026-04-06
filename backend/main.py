@@ -14,7 +14,7 @@ from typing import Any
 import pyatv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from pyatv import exceptions as atv_exc
@@ -76,6 +76,7 @@ _pairing_sessions: dict[str, tuple[PairingHandler, Protocol]] = {}
 _lock = asyncio.Lock()
 _playing_cache: dict[str, Any] = {}
 _play_push_started: set[str] = set()
+_playing_sse_queues: dict[str, list[asyncio.Queue[str]]] = {}
 _cred_flags_cache: dict[str, tuple[float, tuple[bool, bool, bool]]] = {}
 _CRED_FLAGS_TTL_SEC = 60.0
 
@@ -512,6 +513,33 @@ def _merge_playing_priority(
     )
 
 
+def _notify_playing_sse_subscribers(identifier: str, snap: PlayingStateOut) -> None:
+    """将推送快照广播给该设备的所有 SSE 订阅者（在 asyncio 线程上执行）。"""
+    line = snap.model_dump_json()
+
+    def pump() -> None:
+        for q in _playing_sse_queues.get(identifier, []):
+            try:
+                q.put_nowait(line)
+            except asyncio.QueueFull:
+                try:
+                    q.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+                try:
+                    q.put_nowait(line)
+                except asyncio.QueueFull:
+                    pass
+
+    loop = _loop
+    if loop is None:
+        return
+    try:
+        loop.call_soon_thread_safe(pump)
+    except RuntimeError:
+        pump()
+
+
 def _is_playing_payload_empty(p: PlayingStateOut) -> bool:
     if not p.supported:
         return True
@@ -532,9 +560,9 @@ class _PlayingPushListener(PushListener):
 
     def playstatus_update(self, updater: Any, playstatus: Any) -> None:
         try:
-            _playing_cache[self.identifier] = _playing_snapshot_from_playing(
-                playstatus
-            )
+            snap = _playing_snapshot_from_playing(playstatus)
+            _playing_cache[self.identifier] = snap
+            _notify_playing_sse_subscribers(self.identifier, snap)
         except Exception:
             logger.exception("处理 playstatus 推送失败: %s", self.identifier)
 
@@ -730,6 +758,61 @@ async def send_remote(identifier: str, body: RemoteBody) -> dict[str, str]:
     ) from last_err
 
 
+async def _build_merged_playing_from_atv(
+    identifier: str, atv: AppleTV
+) -> PlayingStateOut:
+    """在已连接的 AppleTV 上读取 playing() 并与推送缓存合并（GET /playing 与 SSE 共用）。"""
+    title_feat = atv.features.get_feature(FeatureName.Title)
+    if title_feat.state == FeatureState.Unsupported:
+        return PlayingStateOut(
+            supported=False,
+            detail=(
+                "无法读取「正在播放」：当前连接不包含可用的 MRP 元数据通道。"
+                "pyatv 文档说明 **Companion 与纯 AirPlay 不提供 playing() 数据**；"
+                "tvOS 15+ 通常需在电视上完成 **AirPlay（含 HAP）配对**，"
+                "以便经隧道使用 MRP。请在「配对」外于系统设置中确认 AirPlay 已信任本机，"
+                "并重新扫描保存凭据。"
+            ),
+        )
+
+    await _ensure_playback_push(atv, identifier)
+    await asyncio.sleep(0.25)
+    polled = await _read_playing_state(atv)
+    cached = _playing_cache.get(identifier)
+    merged = _merge_playing_priority(polled, cached)
+
+    if _is_playing_payload_empty(merged):
+        hint: str | None = None
+        creds = await _scan_cred_flags_cached(identifier)
+        mrp_c = creds[0] if creds else False
+        comp_c = creds[1] if creds else False
+        air_c = creds[2] if creds else False
+
+        if comp_c and not air_c and not mrp_c:
+            hint = (
+                "扫描存储的凭据显示：只有 **Companion**，没有 **AirPlay** 或 **MRP**。"
+                "Companion 只能发遥控键，**不能提供「正在播放」**（与是否在播无关）。"
+                "请再点「配对」：系统会优先让你配对尚未保存的协议，"
+                "按提示完成 **AirPlay** 后重新「扫描」，应看到 airplay_credentials 为 true。"
+            )
+        elif title_feat.state == FeatureState.Available:
+            hint = (
+                "已与媒体协议建立通信，但电视仍上报「空闲/无标题」。"
+                "可尝试：重启 Apple TV；"
+                "若曾用 pyatv/其他工具执行过远程播放 URL（play_url），"
+                "tvOS 可能把元数据锁在 AirPlay 上直至重启。"
+                "并请确认正在使用 App 内播放（非 HDMI 输入源）。"
+            )
+        elif title_feat.state == FeatureState.Unavailable:
+            hint = (
+                "元数据接口回报「暂不可用」。若你确认已在播放，"
+                "多半是仍缺 **AirPlay/MRP** 凭据；请完成 AirPlay 配对并重新扫描。"
+            )
+        if hint:
+            merged = merged.model_copy(update={"hint": hint})
+    return merged
+
+
 @app.get(
     "/api/devices/{identifier}/playing",
     response_model=PlayingStateOut,
@@ -740,55 +823,7 @@ async def get_playing(identifier: str) -> PlayingStateOut:
         atv: AppleTV | None = None
         try:
             atv = await get_or_connect_for_playing(identifier)
-            title_feat = atv.features.get_feature(FeatureName.Title)
-            if title_feat.state == FeatureState.Unsupported:
-                return PlayingStateOut(
-                    supported=False,
-                    detail=(
-                        "无法读取「正在播放」：当前连接不包含可用的 MRP 元数据通道。"
-                        "pyatv 文档说明 **Companion 与纯 AirPlay 不提供 playing() 数据**；"
-                        "tvOS 15+ 通常需在电视上完成 **AirPlay（含 HAP）配对**，"
-                        "以便经隧道使用 MRP。请在「配对」外于系统设置中确认 AirPlay 已信任本机，"
-                        "并重新扫描保存凭据。"
-                    ),
-                )
-
-            await _ensure_playback_push(atv, identifier)
-            await asyncio.sleep(0.25)
-            polled = await _read_playing_state(atv)
-            cached = _playing_cache.get(identifier)
-            merged = _merge_playing_priority(polled, cached)
-
-            if _is_playing_payload_empty(merged):
-                hint: str | None = None
-                creds = await _scan_cred_flags_cached(identifier)
-                mrp_c = creds[0] if creds else False
-                comp_c = creds[1] if creds else False
-                air_c = creds[2] if creds else False
-
-                if comp_c and not air_c and not mrp_c:
-                    hint = (
-                        "扫描存储的凭据显示：只有 **Companion**，没有 **AirPlay** 或 **MRP**。"
-                        "Companion 只能发遥控键，**不能提供「正在播放」**（与是否在播无关）。"
-                        "请再点「配对」：系统会优先让你配对尚未保存的协议，"
-                        "按提示完成 **AirPlay** 后重新「扫描」，应看到 airplay_credentials 为 true。"
-                    )
-                elif title_feat.state == FeatureState.Available:
-                    hint = (
-                        "已与媒体协议建立通信，但电视仍上报「空闲/无标题」。"
-                        "可尝试：重启 Apple TV；"
-                        "若曾用 pyatv/其他工具执行过远程播放 URL（play_url），"
-                        "tvOS 可能把元数据锁在 AirPlay 上直至重启。"
-                        "并请确认正在使用 App 内播放（非 HDMI 输入源）。"
-                    )
-                elif title_feat.state == FeatureState.Unavailable:
-                    hint = (
-                        "元数据接口回报「暂不可用」。若你确认已在播放，"
-                        "多半是仍缺 **AirPlay/MRP** 凭据；请完成 AirPlay 配对并重新扫描。"
-                    )
-                if hint:
-                    merged = merged.model_copy(update={"hint": hint})
-            return merged
+            return await _build_merged_playing_from_atv(identifier, atv)
         except atv_exc.BlockedStateError as e:
             last_blocked = e
             logger.warning(
@@ -812,6 +847,88 @@ async def get_playing(identifier: str) -> PlayingStateOut:
         status_code=503,
         detail="播放状态连接多次失效，请点「断开」后重试。",
     ) from last_blocked
+
+
+_SSE_STREAM_PUSH_WAIT_SEC = 2.5
+_SSE_STREAM_KEEPALIVE_SEC = 25.0
+
+
+async def _playing_sse_generator(identifier: str):
+    """推送 + 定期 playing() 轮询；避免仅依赖 PushUpdates（很多环境下几乎不发进度）。"""
+    q: asyncio.Queue[str] = asyncio.Queue(maxsize=8)
+    lst = _playing_sse_queues.setdefault(identifier, [])
+    lst.append(q)
+    last_sent: str | None = None
+    last_yield_mono = time.monotonic()
+
+    def should_send(line: str) -> bool:
+        nonlocal last_sent, last_yield_mono
+        if line == last_sent:
+            return False
+        last_sent = line
+        last_yield_mono = time.monotonic()
+        return True
+
+    async def poll_merged() -> PlayingStateOut | None:
+        atv: AppleTV | None = None
+        try:
+            atv = await get_or_connect_for_playing(identifier)
+            return await _build_merged_playing_from_atv(identifier, atv)
+        except atv_exc.BlockedStateError:
+            if atv is not None:
+                await _evict_stale_atv(identifier, atv)
+            return None
+        except Exception as e:
+            logger.warning("SSE stream 读取 playing 失败: %s", e)
+            return PlayingStateOut(supported=False, detail=str(e))
+
+    try:
+        initial = await poll_merged()
+        if initial is not None:
+            line = initial.model_dump_json()
+            if should_send(line):
+                yield f"data: {line}\n\n"
+
+        while True:
+            try:
+                payload = await asyncio.wait_for(
+                    q.get(), timeout=_SSE_STREAM_PUSH_WAIT_SEC
+                )
+                if should_send(payload):
+                    yield f"data: {payload}\n\n"
+            except asyncio.TimeoutError:
+                polled = await poll_merged()
+                if polled is not None:
+                    pline = polled.model_dump_json()
+                    if should_send(pline):
+                        yield f"data: {pline}\n\n"
+
+            if time.monotonic() - last_yield_mono >= _SSE_STREAM_KEEPALIVE_SEC:
+                yield ": keepalive\n\n"
+                last_yield_mono = time.monotonic()
+    finally:
+        subs = _playing_sse_queues.get(identifier)
+        if subs:
+            try:
+                subs.remove(q)
+            except ValueError:
+                pass
+            if not subs:
+                _playing_sse_queues.pop(identifier, None)
+
+
+@app.get("/api/devices/{identifier}/playing/stream")
+async def stream_playing(identifier: str) -> StreamingResponse:
+    """SSE：pyatv 推送（若有）+ 约每 2.5s playing() 合并快照，与 GET /playing 一致。"""
+    return StreamingResponse(
+        _playing_sse_generator(identifier),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get(

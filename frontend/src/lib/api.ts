@@ -136,6 +136,11 @@ export async function fetchPlaying(identifier: string): Promise<PlayingSnapshot>
   return res.json() as Promise<PlayingSnapshot>
 }
 
+/** pyatv 推送经后端的 SSE；与 `fetchPlaying` 同域。 */
+export function playingStreamUrl(identifier: string): string {
+  return `/api/devices/${encodeURIComponent(identifier)}/playing/stream`
+}
+
 export function playingArtworkUrl(
   identifier: string,
   cacheKey: number,

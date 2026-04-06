@@ -37,6 +37,7 @@
     "scan": "Scan",
     "pair": "Pair",
     "disconnect": "Disconnect",
+    "close": "Close",
     "cancel": "Cancel",
     "tvPower": "TV power",
     "tvPowerAria": "Turn Apple TV on or off"

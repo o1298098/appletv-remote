@@ -6,6 +6,7 @@ import {
   Scan,
   Tv,
   Unplug,
+  X,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/select"
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetHeader,
   SheetTitle,
@@ -31,6 +33,10 @@ import { DeviceActionsMenu } from "@/components/remote/device-actions-menu"
 import { LanguagePicker } from "@/components/remote/language-picker"
 import { ThemeToggle } from "@/components/remote/theme-toggle"
 
+function deviceIsPaired(d: AtvDevice) {
+  return Boolean(d.mrp_credentials || d.companion_credentials)
+}
+
 export function AppHeader({
   devices,
   selectedId,
@@ -41,6 +47,7 @@ export function AppHeader({
   credLabelFor,
   handleScan,
   openPairDialog,
+  openPairDialogAndStartPairing,
   handleDisconnect,
   mobileSheetOpen,
   setMobileSheetOpen,
@@ -54,39 +61,12 @@ export function AppHeader({
   credLabelFor: (d: AtvDevice) => string
   handleScan: (opts?: { silent?: boolean }) => void | Promise<void>
   openPairDialog: () => void
+  openPairDialogAndStartPairing: (deviceId: string) => void | Promise<void>
   handleDisconnect: () => void | Promise<void>
   mobileSheetOpen: boolean
   setMobileSheetOpen: (open: boolean) => void
 }) {
   const { t } = useTranslation()
-
-  const DeviceListButton = ({ onPick }: { onPick?: () => void }) => (
-    <div className="flex max-h-[50vh] flex-col gap-1 overflow-y-auto pr-1">
-      {devices.length === 0 ? (
-        <p className="text-muted-foreground py-6 text-center text-sm">
-          {t("device.emptyList")}
-        </p>
-      ) : (
-        devices.map((d) => (
-          <Button
-            key={d.identifier}
-            variant={selectedId === d.identifier ? "secondary" : "ghost"}
-            className="h-auto min-h-[3rem] w-full touch-manipulation justify-start gap-2 py-3.5 text-left text-base"
-            onClick={() => {
-              setSelectedId(d.identifier)
-              onPick?.()
-            }}
-          >
-            <Tv className="size-4 shrink-0 opacity-70" />
-            <span className="min-w-0 flex-1 truncate">{d.name}</span>
-            <Badge variant="outline" className="shrink-0 text-[10px]">
-              {credLabelFor(d)}
-            </Badge>
-          </Button>
-        ))
-      )}
-    </div>
-  )
 
   return (
     <header className="bg-background/90 supports-[backdrop-filter]:bg-background/75 sticky top-0 z-30 border-b backdrop-blur-md pt-safe">
@@ -118,7 +98,19 @@ export function AppHeader({
             onValueChange={(v) => setSelectedId(v ?? "")}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder={t("device.selectAtv")} />
+              <SelectValue placeholder={t("device.selectAtv")}>
+                {selected ? (
+                  <>
+                    {selected.name}
+                    <span className="text-muted-foreground">
+                      {" "}
+                      ({credLabelFor(selected)})
+                    </span>
+                  </>
+                ) : selectedId ? (
+                  <span className="text-muted-foreground">…</span>
+                ) : undefined}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {devices.map((d) => (
@@ -183,92 +175,120 @@ export function AppHeader({
         </div>
 
         <div className="flex flex-col gap-2 md:hidden">
-          <div className="flex gap-2">
-            <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
-              <SheetTrigger
-                type="button"
-                className={cn(
-                  buttonVariants({ variant: "outline" }),
-                  "h-12 min-w-0 flex-1 touch-manipulation justify-between gap-2 px-3 text-left text-base",
-                )}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <Tv className="size-5 shrink-0 opacity-80" />
-                  <span className="truncate font-medium">
-                    {selected?.name ?? t("device.pickAtv")}
-                  </span>
+          <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
+            <SheetTrigger
+              type="button"
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "h-12 w-full min-w-0 touch-manipulation justify-between gap-2 px-3 text-left text-base",
+              )}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <Tv className="size-5 shrink-0 opacity-80" />
+                <span className="truncate font-medium">
+                  {selected?.name ?? t("device.pickAtv")}
                 </span>
-                <ChevronDown className="size-5 shrink-0 opacity-50" />
-              </SheetTrigger>
-              <SheetContent
-                side="bottom"
-                className="flex max-h-[min(85dvh,32rem)] flex-col gap-0 rounded-t-2xl pb-safe"
-              >
-                <SheetHeader className="border-b pb-3 text-left">
-                  <SheetTitle className="text-lg">
-                    {t("device.chooseSheetTitle")}
-                  </SheetTitle>
-                </SheetHeader>
-                <div className="min-h-0 flex-1 overflow-y-auto py-2">
-                  <DeviceListButton onPick={() => setMobileSheetOpen(false)} />
+              </span>
+              <ChevronDown className="size-5 shrink-0 opacity-50" />
+            </SheetTrigger>
+            <SheetContent
+              side="bottom"
+              showCloseButton={false}
+              className="flex max-h-[min(88dvh,36rem)] flex-col gap-0 rounded-t-2xl p-0 pb-safe"
+            >
+              <SheetHeader className="border-b flex flex-row items-center gap-2 py-3 pr-2 pl-4">
+                <SheetTitle className="text-lg min-w-0 flex-1 text-left">
+                  {t("device.chooseSheetTitle")}
+                </SheetTitle>
+                <div className="flex shrink-0 items-center">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={scanning}
+                    className="size-10 touch-manipulation"
+                    title={t("actions.scan")}
+                    aria-label={t("actions.scan")}
+                    onClick={() => void handleScan()}
+                  >
+                    {scanning ? (
+                      <Loader2 className="size-5 animate-spin" />
+                    ) : (
+                      <Scan className="size-5 opacity-80" />
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={!selectedId}
+                    className="text-destructive hover:text-destructive size-10 touch-manipulation"
+                    title={t("actions.disconnect")}
+                    aria-label={t("actions.disconnect")}
+                    onClick={() => {
+                      setMobileSheetOpen(false)
+                      void handleDisconnect()
+                    }}
+                  >
+                    <Unplug className="size-5" />
+                  </Button>
+                  <SheetClose
+                    type="button"
+                    className={cn(
+                      buttonVariants({ variant: "ghost", size: "icon" }),
+                      "size-10 touch-manipulation",
+                    )}
+                    title={t("actions.close")}
+                    aria-label={t("actions.close")}
+                  >
+                    <X className="size-5 opacity-80" />
+                  </SheetClose>
                 </div>
-              </SheetContent>
-            </Sheet>
-            {selectedIsPaired ? (
-              <DeviceActionsMenu
-                align="end"
-                scanning={scanning}
-                selectedId={selectedId}
-                onScan={() => void handleScan()}
-                onPair={openPairDialog}
-                onDisconnect={handleDisconnect}
-                triggerClassName="size-12 shrink-0 touch-manipulation p-0"
-                triggerProps={{
-                  "aria-label": t("actions.moreAria"),
-                }}
-                triggerChildren={
-                  <MoreHorizontal className="size-5 opacity-80" />
-                }
-              />
-            ) : null}
-          </div>
-
-          {!selectedIsPaired ? (
-            <div className="grid grid-cols-3 gap-2">
-              <Button
-                variant="secondary"
-                type="button"
-                disabled={scanning}
-                onClick={() => void handleScan()}
-                className="h-11 touch-manipulation text-sm font-medium"
-              >
-                {scanning ? (
-                  <Loader2 className="size-4 animate-spin" />
+              </SheetHeader>
+              <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+                {devices.length === 0 ? (
+                  <p className="text-muted-foreground py-6 text-center text-sm">
+                    {t("device.emptyList")}
+                  </p>
                 ) : (
-                  <Scan className="size-4" />
+                  <div className="flex flex-col gap-1 pr-1">
+                    {devices.map((d) => {
+                      const paired = deviceIsPaired(d)
+                      return (
+                        <Button
+                          key={d.identifier}
+                          variant={
+                            selectedId === d.identifier ? "secondary" : "ghost"
+                          }
+                          className="h-auto min-h-[3rem] w-full touch-manipulation justify-start gap-2 py-3.5 text-left text-base"
+                          onClick={() => {
+                            setSelectedId(d.identifier)
+                            setMobileSheetOpen(false)
+                            if (!paired) {
+                              window.setTimeout(() => {
+                                void openPairDialogAndStartPairing(d.identifier)
+                              }, 200)
+                            }
+                          }}
+                        >
+                          <Tv className="size-4 shrink-0 opacity-70" />
+                          <span className="min-w-0 flex-1 truncate">
+                            {d.name}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 text-[10px]"
+                          >
+                            {credLabelFor(d)}
+                          </Badge>
+                        </Button>
+                      )
+                    })}
+                  </div>
                 )}
-                {t("actions.scan")}
-              </Button>
-              <Button
-                variant="outline"
-                type="button"
-                onClick={openPairDialog}
-                className="h-11 touch-manipulation text-sm font-medium"
-              >
-                {t("actions.pair")}
-              </Button>
-              <Button
-                variant="ghost"
-                type="button"
-                disabled={!selectedId}
-                onClick={() => void handleDisconnect()}
-                className="h-11 touch-manipulation text-sm font-medium"
-              >
-                <Unplug className="size-4" />
-                {t("actions.disconnect")}
-              </Button>
-            </div>
-          ) : null}
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
     </header>
