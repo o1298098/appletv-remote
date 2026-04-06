@@ -6,11 +6,22 @@ Web client for controlling Apple TV on your LAN. In production the FastAPI backe
 
 ## Local development
 
-1. Install dependencies: `npm ci` (or `npm install`).
-2. Start the API from the repo’s `backend` folder (default port **8765**), for example:  
-   `uvicorn main:app --host 0.0.0.0 --port 8765`
-3. In this directory run: `npm run dev`  
-   The dev server proxies `/api` to `http://127.0.0.1:8765` (see `vite.config.ts`).
+1. Install frontend dependencies:
+   - `cd frontend`
+   - `npm ci` (or `npm install`)
+2. Install backend dependencies in a Python virtual environment:
+   - `cd ../backend`
+   - `python -m venv .venv`
+   - Activate venv:
+     - PowerShell: `.venv\Scripts\Activate.ps1`
+     - bash/zsh: `source .venv/bin/activate`
+   - `pip install -r requirements.txt`
+3. Start the API from `backend` (default port **8765**):
+   - `uvicorn main:app --host 0.0.0.0 --port 8765`
+4. In another terminal, start the frontend dev server from `frontend`:
+   - `cd frontend`
+   - `npm run dev`
+   - Vite proxies `/api` to `http://127.0.0.1:8765` (see `frontend/vite.config.ts`).
 
 ## Production build
 
