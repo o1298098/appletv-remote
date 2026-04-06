@@ -311,6 +311,11 @@ export async function touchClickRemote(
   if (!res.ok) throw new Error(await parseError(res))
 }
 
+export function touchWsUrl(identifier: string): string {
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:"
+  return `${proto}//${window.location.host}/api/devices/${encodeURIComponent(identifier)}/touch/ws`
+}
+
 export type AtvUserAccount = {
   name: string | null
   identifier: string

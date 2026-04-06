@@ -8,6 +8,7 @@ import {
   touchActionRemote,
   touchClickRemote,
   touchSwipeRemote,
+  touchWsUrl,
 } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
@@ -15,6 +16,14 @@ import { cn } from "@/lib/utils"
 const TAP_MAX_MOVE_PX = 52
 /** 虚拟板 0–1000 上总位移须很小才判为轻点（与 TAP_MAX_MOVE_PX 用 AND，避免竖滑被误判成点按）。 */
 const TAP_MODEL_MAX = 38
+/** 连续触控模式下，最小位移阈值（虚拟板 0-1000 坐标系）。 */
+const HOLD_STEP_MODEL = 3
+/** 连续触控模式下，最小发送间隔，避免事件过密。 */
+const HOLD_MIN_INTERVAL_MS = 16
+/** 相对位移放大系数（越大越灵敏，越接近触摸板“推指针”感觉）。 */
+const TRACKPAD_GAIN = 0.78
+/** 微小抖动死区（像素），用于“悬停”在同一图标附近。 */
+const TRACKPAD_DEADZONE_PX = 0.6
 
 function clientToPadModel(
   el: HTMLElement,
@@ -108,13 +117,32 @@ export function RemoteTouchPad({
   const padRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{
     pointerId: number
+    gid: number
     sx: number
     sy: number
     cx: number
     cy: number
     t: number
+    lx: number
+    ly: number
+    vx: number
+    vy: number
+    lcx: number
+    lcy: number
+    lt: number
+    lastEmitAt: number
+    moved: boolean
+    pressSent: boolean
   } | null>(null)
   const lastClientRef = useRef({ x: 0, y: 0 })
+  const gestureSeqRef = useRef(0)
+  const actionQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const pendingHoldRef = useRef<{ x: number; y: number; gid?: number } | null>(
+    null,
+  )
+  const drainingHoldRef = useRef(false)
+  const touchWsRef = useRef<WebSocket | null>(null)
+  const touchWsConnectingRef = useRef(false)
   /** True after pointer path committed a gesture; clears on next pointerdown or after click dedup. */
   const pointerGestureCommittedRef = useRef(false)
   const ctxRef = useRef({
@@ -169,6 +197,87 @@ export function RemoteTouchPad({
     })()
   }
 
+  const queueTouchAction = (
+    x: number,
+    y: number,
+    mode: 1 | 3 | 4 | 5,
+    gid?: number,
+    reportError = false,
+  ) => {
+    const ws = touchWsRef.current
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({ type: "action", x, y, mode, gid }))
+      } catch (err) {
+        if (!reportError) return
+        const tr = ctxRef.current.t
+        toast.error(
+          err instanceof Error ? err.message : tr("advanced.touchFailed"),
+        )
+      }
+      return
+    }
+
+    const { deviceId: id, t: tr } = ctxRef.current
+    actionQueueRef.current = actionQueueRef.current.then(async () => {
+      try {
+        await touchActionRemote(id, { x, y, mode })
+      } catch (err) {
+        if (!reportError) return
+        toast.error(
+          err instanceof Error ? err.message : tr("advanced.touchFailed"),
+        )
+      }
+    })
+  }
+
+  const queueHoldLatest = (x: number, y: number, gid?: number) => {
+    const ws = touchWsRef.current
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({ type: "action", x, y, mode: 3, gid }))
+      } catch {
+        // WS 失败则回退到 HTTP 队列路径
+      }
+      return
+    }
+
+    pendingHoldRef.current = { x, y, gid }
+    if (drainingHoldRef.current) return
+    drainingHoldRef.current = true
+    actionQueueRef.current = actionQueueRef.current.then(async () => {
+      while (pendingHoldRef.current) {
+        const next = pendingHoldRef.current
+        pendingHoldRef.current = null
+        try {
+          const ws = touchWsRef.current
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(
+              JSON.stringify({
+                type: "action",
+                x: next.x,
+                y: next.y,
+                mode: 3,
+                gid: next.gid,
+              }),
+            )
+          } else {
+            await touchActionRemote(ctxRef.current.deviceId, { ...next, mode: 3 })
+          }
+        } catch {
+          // 连续移动失败时忽略单次点，避免高频 toast 干扰交互。
+        }
+      }
+      drainingHoldRef.current = false
+      const pending = pendingHoldRef.current as
+        | { x: number; y: number; gid?: number }
+        | null
+      if (pending) {
+        queueHoldLatest(pending.x, pending.y, pending.gid)
+      }
+    })
+  }
+
   const runTapAtClient = (el: HTMLElement, clientX: number, clientY: number) => {
     const { x, y } = clientToPadModel(el, clientX, clientY)
     const { deviceId: id, t: tr } = ctxRef.current
@@ -183,6 +292,35 @@ export function RemoteTouchPad({
       }
     })()
   }
+
+  useEffect(() => {
+    if (!deviceId || disabled) return
+    if (touchWsRef.current || touchWsConnectingRef.current) return
+    touchWsConnectingRef.current = true
+    const ws = new WebSocket(touchWsUrl(deviceId))
+    ws.onopen = () => {
+      touchWsRef.current = ws
+      touchWsConnectingRef.current = false
+    }
+    ws.onclose = () => {
+      if (touchWsRef.current === ws) {
+        touchWsRef.current = null
+      }
+      touchWsConnectingRef.current = false
+    }
+    ws.onerror = () => {
+      // 留给 HTTP 回退处理，不打断用户手势。
+    }
+    return () => {
+      if (touchWsRef.current === ws) touchWsRef.current = null
+      touchWsConnectingRef.current = false
+      try {
+        ws.close()
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [deviceId, disabled])
 
   useEffect(() => {
     const el = padRef.current
@@ -208,11 +346,23 @@ export function RemoteTouchPad({
       lastClientRef.current = { x: e.clientX, y: e.clientY }
       dragRef.current = {
         pointerId: e.pointerId,
+        gid: ++gestureSeqRef.current,
         sx: x,
         sy: y,
         cx: e.clientX,
         cy: e.clientY,
         t: Date.now(),
+        // 连续模式采用相对位移，触点从中心开始更接近官方手感。
+        lx: 500,
+        ly: 500,
+        vx: 500,
+        vy: 500,
+        lcx: e.clientX,
+        lcy: e.clientY,
+        lt: Date.now(),
+        lastEmitAt: 0,
+        moved: false,
+        pressSent: false,
       }
     }
 
@@ -221,6 +371,45 @@ export function RemoteTouchPad({
       if (!d || d.pointerId !== e.pointerId) return
       lastClientRef.current = { x: e.clientX, y: e.clientY }
       e.preventDefault()
+      if (ctxRef.current.inactive) return
+
+      const now = Date.now()
+      if (now - d.lastEmitAt < HOLD_MIN_INTERVAL_MS) return
+      const r = el.getBoundingClientRect()
+      if (r.width <= 0 || r.height <= 0) return
+      const dxPx = e.clientX - d.lcx
+      const dyPx = e.clientY - d.lcy
+      const deltaPx = Math.hypot(dxPx, dyPx)
+      if (deltaPx < TRACKPAD_DEADZONE_PX) {
+        d.lcx = e.clientX
+        d.lcy = e.clientY
+        return
+      }
+      const dxModel = (dxPx / r.width) * 1000 * TRACKPAD_GAIN
+      const dyModel = (dyPx / r.height) * 1000 * TRACKPAD_GAIN
+
+      d.vx = Math.max(0, Math.min(1000, d.vx + dxModel))
+      d.vy = Math.max(0, Math.min(1000, d.vy + dyModel))
+      const x = Math.round(d.vx)
+      const y = Math.round(d.vy)
+      const modelDelta = Math.hypot(x - d.lx, y - d.ly)
+
+      if (!d.pressSent) {
+        d.pressSent = true
+        queueTouchAction(d.lx, d.ly, 1, d.gid)
+      }
+
+      if (modelDelta >= HOLD_STEP_MODEL) {
+        queueHoldLatest(x, y, d.gid)
+        d.lx = x
+        d.ly = y
+        d.lastEmitAt = now
+      }
+
+      d.lcx = e.clientX
+      d.lcy = e.clientY
+      d.lt = now
+      d.moved = true
     }
 
     const finishPointer = (e: PointerEvent) => {
@@ -235,6 +424,18 @@ export function RemoteTouchPad({
       if (ctxRef.current.inactive) return
 
       pointerGestureCommittedRef.current = true
+      if (d.pressSent) {
+        pendingHoldRef.current = null
+        const x = Math.round(d.vx)
+        const y = Math.round(d.vy)
+        const remainModelDist = Math.hypot(x - d.lx, y - d.ly)
+        if (remainModelDist >= 4) {
+          queueHoldLatest(x, y, d.gid)
+        }
+        queueTouchAction(x, y, 4, d.gid, true)
+        return
+      }
+
       runTouchOrSwipe(el, d, e.clientX, e.clientY)
     }
 
@@ -245,6 +446,17 @@ export function RemoteTouchPad({
       if (ctxRef.current.inactive) return
       pointerGestureCommittedRef.current = true
       const lc = lastClientRef.current
+      if (d.pressSent) {
+        pendingHoldRef.current = null
+        const x = Math.round(d.vx)
+        const y = Math.round(d.vy)
+        const remainModelDist = Math.hypot(x - d.lx, y - d.ly)
+        if (remainModelDist >= 4) {
+          queueHoldLatest(x, y, d.gid)
+        }
+        queueTouchAction(x, y, 4, d.gid, true)
+        return
+      }
       runTouchOrSwipe(el, d, lc.x, lc.y)
     }
 
