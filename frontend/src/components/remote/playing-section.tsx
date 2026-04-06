@@ -160,7 +160,7 @@ export function PlayingSection({
               {subtitle}
             </p>
           ) : null}
-          {snapshot.app?.name ? (
+          {snapshot.app?.name && !subtitle ? (
             <p className="text-muted-foreground/80 text-[10px] leading-snug">
               {t("playing.appLabel")} · {snapshot.app.name}
             </p>

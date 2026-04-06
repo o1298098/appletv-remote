@@ -42,6 +42,17 @@
     "tvPower": "TV power",
     "tvPowerAria": "Turn Apple TV on or off"
   },
+  "apps": {
+    "button": "Apps",
+    "buttonAria": "Open installed apps list",
+    "title": "Installed apps",
+    "loading": "Loading apps…",
+    "empty": "No apps returned (or the list is empty)",
+    "refresh": "Refresh",
+    "loadFailed": "Could not load the app list",
+    "launchFailed": "Could not open this app",
+    "toastLaunched": "Opened: {{name}}"
+  },
   "playing": {
     "loading": "Loading playback info…",
     "unavailable": "Playback info isn’t available. Pairing must be complete; on tvOS 15+ the media protocol (AirPlay / MRP tunnel) is usually required.",

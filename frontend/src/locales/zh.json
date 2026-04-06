@@ -42,6 +42,17 @@
     "tvPower": "开关电视",
     "tvPowerAria": "打开或关闭 Apple TV"
   },
+  "apps": {
+    "button": "应用",
+    "buttonAria": "打开已安装应用列表",
+    "title": "已安装应用",
+    "loading": "正在加载应用列表…",
+    "empty": "列表为空（或电视未返回任何条目）",
+    "refresh": "刷新",
+    "loadFailed": "加载应用列表失败",
+    "launchFailed": "无法打开该应用",
+    "toastLaunched": "已打开：{{name}}"
+  },
   "playing": {
     "loading": "正在获取播放信息…",
     "unavailable": "无法读取播放内容与进度。请确认已完成配对；tvOS 15+ 上通常需要 AirPlay/MRP 隧道。",

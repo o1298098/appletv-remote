@@ -141,6 +141,40 @@ export function playingStreamUrl(identifier: string): string {
   return `/api/devices/${encodeURIComponent(identifier)}/playing/stream`
 }
 
+export type AtvInstalledApp = {
+  name: string | null
+  identifier: string
+  /** 来自 pyatv（若将来支持）或后端 iTunes 查询的 HTTPS 图标地址 */
+  icon_url?: string | null
+}
+
+export async function fetchInstalledApps(
+  identifier: string,
+): Promise<AtvInstalledApp[]> {
+  const res = await fetch(
+    `/api/devices/${encodeURIComponent(identifier)}/apps`,
+  )
+  if (!res.ok) throw new Error(await parseError(res))
+  const data = (await res.json()) as { apps: AtvInstalledApp[] }
+  return data.apps
+}
+
+/** `target` 为 bundle id（如 com.netflix.Netflix）或 pyatv 支持的深链 URL。 */
+export async function launchAtvApp(
+  identifier: string,
+  target: string,
+): Promise<void> {
+  const res = await fetch(
+    `/api/devices/${encodeURIComponent(identifier)}/apps/launch`,
+    {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({ target }),
+    },
+  )
+  if (!res.ok) throw new Error(await parseError(res))
+}
+
 export function playingArtworkUrl(
   identifier: string,
   cacheKey: number,

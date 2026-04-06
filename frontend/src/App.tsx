@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { Trans } from "react-i18next"
 import { AppHeader } from "@/components/remote/app-header"
+import { InstalledAppsDialogTrigger } from "@/components/remote/installed-apps-dialog"
 import { PairDialog } from "@/components/remote/pair-dialog"
 import { PlayingSection } from "@/components/remote/playing-section"
 import {
@@ -124,17 +125,22 @@ export default function App() {
                 )}
               </CardDescription>
               {selectedId ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="size-9 shrink-0 touch-manipulation"
-                  onClick={() => void push("power_toggle")}
-                  title={t("actions.tvPower")}
-                  aria-label={t("actions.tvPowerAria")}
-                >
-                  <Power className="size-4 opacity-80" />
-                </Button>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {selectedIsPaired ? (
+                    <InstalledAppsDialogTrigger deviceId={selectedId} />
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-9 shrink-0 touch-manipulation"
+                    onClick={() => void push("power_toggle")}
+                    title={t("actions.tvPower")}
+                    aria-label={t("actions.tvPowerAria")}
+                  >
+                    <Power className="size-4 opacity-80" />
+                  </Button>
+                </div>
               ) : null}
             </div>
           </CardHeader>

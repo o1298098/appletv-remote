@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import random
 import time
 import uuid
+import urllib.parse
+import urllib.request
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from pathlib import Path
@@ -80,6 +83,9 @@ _playing_sse_queues: dict[str, list[asyncio.Queue[str]]] = {}
 _cred_flags_cache: dict[str, tuple[float, tuple[bool, bool, bool]]] = {}
 _CRED_FLAGS_TTL_SEC = 60.0
 
+_itunes_artwork_cache: dict[str, tuple[float, str | None]] = {}
+_ITUNES_ARTWORK_CACHE_TTL_SEC = 86400 * 7
+
 
 def get_loop() -> asyncio.AbstractEventLoop:
     if _loop is None:
@@ -117,6 +123,86 @@ def _pairing_eligible_protocol(conf: BaseConfig) -> Protocol | None:
         if wants_pair(svc):
             return proto
     return None
+
+
+def _itunes_app_icons_enabled() -> bool:
+    return os.environ.get("ATV_ITUNES_APP_ICONS", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )
+
+
+def _pyatv_app_icon_url(raw_app: Any) -> str | None:
+    """若将来 pyatv 在 App 上暴露图标地址，则自动带上（当前官方版通常仅有 name/identifier）。"""
+    for key in ("icon", "icon_url", "artwork_url", "image_url"):
+        v = getattr(raw_app, key, None)
+        if isinstance(v, str):
+            s = v.strip()
+            if s.startswith(("http://", "https://")):
+                return s.replace("http://", "https://", 1)
+    return None
+
+
+def _itunes_lookup_artwork_url_sync(bundle_id: str) -> str | None:
+    """用 iTunes Search API 按 bundle id 查询图标（与局域网协议无关，非系统 App 较常能命中）。"""
+    if not bundle_id or len(bundle_id) > 256:
+        return None
+    now = time.monotonic()
+    hit = _itunes_artwork_cache.get(bundle_id)
+    if hit and now - hit[0] < _ITUNES_ARTWORK_CACHE_TTL_SEC:
+        return hit[1]
+
+    q = urllib.parse.urlencode({"bundleId": bundle_id})
+    url = f"https://itunes.apple.com/lookup?{q}"
+    result: str | None = None
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "AppleTVRemote/1.0"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        results = payload.get("results") if isinstance(payload, dict) else None
+        if isinstance(results, list) and results:
+            first = results[0]
+            if isinstance(first, dict):
+                art = (
+                    first.get("artworkUrl512")
+                    or first.get("artworkUrl100")
+                    or first.get("artworkUrl60")
+                )
+                if isinstance(art, str) and art.startswith("http"):
+                    result = art.replace("http://", "https://", 1)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError) as e:
+        logger.debug("iTunes 图标查询失败 %s: %s", bundle_id, e)
+
+    _itunes_artwork_cache[bundle_id] = (now, result)
+    return result
+
+
+async def _enrich_installed_app_icons_itunes(
+    apps: list[InstalledAppOut],
+) -> list[InstalledAppOut]:
+    if not _itunes_app_icons_enabled():
+        return apps
+
+    sem = asyncio.Semaphore(8)
+
+    async def one(a: InstalledAppOut) -> InstalledAppOut:
+        if a.icon_url:
+            return a
+        async with sem:
+            url = await asyncio.to_thread(
+                _itunes_lookup_artwork_url_sync, a.identifier
+            )
+        if url:
+            return a.model_copy(update={"icon_url": url})
+        return a
+
+    return list(await asyncio.gather(*[one(x) for x in apps]))
 
 
 def _invalidate_cred_flags_cache(identifier: str | None = None) -> None:
@@ -404,6 +490,20 @@ class RemoteBody(BaseModel):
     command: str
     action: str | None = None
     position_sec: int | None = None
+
+
+class InstalledAppOut(BaseModel):
+    name: str | None = None
+    identifier: str
+    icon_url: str | None = None
+
+
+class AppsListResponse(BaseModel):
+    apps: list[InstalledAppOut]
+
+
+class LaunchAppBody(BaseModel):
+    target: str = Field(..., min_length=1, max_length=4096)
 
 
 class PlayingAppOut(BaseModel):
@@ -755,6 +855,89 @@ async def send_remote(identifier: str, body: RemoteBody) -> dict[str, str]:
     raise HTTPException(
         status_code=503,
         detail=f"发送指令失败: {last_err}",
+    ) from last_err
+
+
+@app.get(
+    "/api/devices/{identifier}/apps",
+    response_model=AppsListResponse,
+)
+async def list_installed_apps(identifier: str) -> AppsListResponse:
+    last_err: Exception | None = None
+    for attempt in range(2):
+        try:
+            atv = await get_or_connect(identifier)
+            raw = await atv.apps.app_list()
+            out: list[InstalledAppOut] = []
+            for a in raw:
+                ident = str(getattr(a, "identifier", "") or "").strip()
+                if not ident:
+                    continue
+                nm = getattr(a, "name", None)
+                name = str(nm).strip() if nm is not None else None
+                if name == "":
+                    name = None
+                icon = _pyatv_app_icon_url(a)
+                out.append(
+                    InstalledAppOut(name=name, identifier=ident, icon_url=icon)
+                )
+            out.sort(
+                key=lambda x: (
+                    (x.name or "").lower(),
+                    x.identifier.lower(),
+                )
+            )
+            out = await _enrich_installed_app_icons_itunes(out)
+            return AppsListResponse(apps=out)
+        except HTTPException:
+            raise
+        except atv_exc.NotSupportedError as e:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "当前连接不支持列出已安装应用。请完成 **Companion** 配对；"
+                    "tvOS 15+ 上通常需要 Companion 才能列出/启动应用。"
+                ),
+            ) from e
+        except Exception as e:
+            last_err = e
+            logger.warning("读取应用列表失败 (尝试 %s): %s", attempt + 1, e)
+            await _close_atv(identifier)
+    raise HTTPException(
+        status_code=503,
+        detail=f"无法读取应用列表: {last_err}",
+    ) from last_err
+
+
+@app.post("/api/devices/{identifier}/apps/launch")
+async def launch_installed_app(
+    identifier: str, body: LaunchAppBody
+) -> dict[str, str]:
+    target = body.target.strip()
+    if not target:
+        raise HTTPException(status_code=400, detail="target 不能为空")
+    last_err: Exception | None = None
+    for attempt in range(2):
+        try:
+            atv = await get_or_connect(identifier)
+            await atv.apps.launch_app(target)
+            return {"status": "ok"}
+        except HTTPException:
+            raise
+        except atv_exc.NotSupportedError as e:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "当前连接不支持从网络侧启动应用，请完成 **Companion** 配对后重试。"
+                ),
+            ) from e
+        except Exception as e:
+            last_err = e
+            logger.warning("启动应用失败 (尝试 %s): %s", attempt + 1, e)
+            await _close_atv(identifier)
+    raise HTTPException(
+        status_code=503,
+        detail=f"启动失败: {last_err}",
     ) from last_err
 
 
