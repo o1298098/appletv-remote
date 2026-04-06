@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/badge"
 import type { AtvDevice } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { DeviceActionsMenu } from "@/components/remote/device-actions-menu"
+import { DeviceAdvancedDialogTrigger } from "@/components/remote/device-advanced-dialog"
 import { LanguagePicker } from "@/components/remote/language-picker"
 import { ThemeToggle } from "@/components/remote/theme-toggle"
 
@@ -83,6 +84,9 @@ export function AppHeader({
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
+              {selectedId && selectedIsPaired ? (
+                <DeviceAdvancedDialogTrigger deviceId={selectedId} />
+              ) : null}
               <ThemeToggle />
               <LanguagePicker />
             </div>

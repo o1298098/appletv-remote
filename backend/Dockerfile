@@ -9,6 +9,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY main.py .
+COPY atv_web ./atv_web
 
 ENV PYATV_STORAGE=/data/pyatv.json
 VOLUME ["/data"]

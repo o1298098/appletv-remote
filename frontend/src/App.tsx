@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next"
 import {
   ChevronDown,
   ChevronLeft,
@@ -5,7 +6,9 @@ import {
   ChevronUp,
   ChevronsLeft,
   ChevronsRight,
+  Hand,
   Home,
+  Move,
   Play,
   Power,
   Undo2,
@@ -15,12 +18,14 @@ import {
 import { Trans } from "react-i18next"
 import { AppHeader } from "@/components/remote/app-header"
 import { InstalledAppsDialogTrigger } from "@/components/remote/installed-apps-dialog"
+import { KeyboardAutoDialog } from "@/components/remote/keyboard-auto-dialog"
 import { PairDialog } from "@/components/remote/pair-dialog"
 import { PlayingSection } from "@/components/remote/playing-section"
 import {
   HoldableActionButton,
   RemoteBtn,
 } from "@/components/remote/remote-buttons"
+import { RemoteTouchPad } from "@/components/remote/remote-touch-pad"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -31,8 +36,82 @@ import {
 } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { useAtvRemoteApp } from "@/hooks/use-atv-remote-app"
+import { useMobileNavMode } from "@/hooks/use-mobile-nav-mode"
+import type { RemotePush } from "@/hooks/use-remote-press-handlers"
 import { REMOTE_KEY_BASE } from "@/lib/atv-remote-constants"
 import { cn } from "@/lib/utils"
+
+function DpadGrid({
+  selectedId,
+  push,
+  t,
+}: {
+  selectedId: string | null
+  push: RemotePush
+  t: TFunction
+}) {
+  return (
+    <div className="mx-auto grid w-full max-w-[13.5rem] grid-cols-3 gap-1.5 md:max-w-[14rem] md:gap-2">
+      <div />
+      <RemoteBtn
+        label={t("card.up")}
+        command="up"
+        disabled={!selectedId}
+        push={push}
+        title={t("card.titleDpad")}
+        icon={
+          <ChevronUp className="size-6 opacity-90" strokeWidth={2.25} />
+        }
+      />
+      <div />
+      <RemoteBtn
+        label={t("card.left")}
+        command="left"
+        disabled={!selectedId}
+        push={push}
+        title={t("card.titleDpad")}
+        icon={
+          <ChevronLeft className="size-6 opacity-90" strokeWidth={2.25} />
+        }
+      />
+      <div className="flex items-center justify-center">
+        <RemoteBtn
+          label={t("card.select")}
+          emphasis
+          command="select"
+          disabled={!selectedId}
+          push={push}
+          title={t("card.titleDpad")}
+        />
+      </div>
+      <RemoteBtn
+        label={t("card.right")}
+        command="right"
+        disabled={!selectedId}
+        push={push}
+        title={t("card.titleDpad")}
+        icon={
+          <ChevronRight className="size-6 opacity-90" strokeWidth={2.25} />
+        }
+      />
+      <div />
+      <RemoteBtn
+        label={t("card.down")}
+        command="down"
+        disabled={!selectedId}
+        push={push}
+        title={t("card.titleDpad")}
+        icon={
+          <ChevronDown className="size-6 opacity-90" strokeWidth={2.25} />
+        }
+      />
+      <div />
+    </div>
+  )
+}
+
+const MOBILE_MODE_TOGGLE_CLASS =
+  "absolute top-2 right-2 z-20 size-9 touch-manipulation rounded-lg border border-border/60 bg-background/85 shadow-sm backdrop-blur-sm"
 
 export default function App() {
   const {
@@ -67,6 +146,7 @@ export default function App() {
     startPair,
     completePairFromTv,
   } = useAtvRemoteApp()
+  const { mobileNavMode, setMobileNavMode } = useMobileNavMode()
 
   return (
     <div className="bg-background flex min-h-dvh flex-col">
@@ -145,7 +225,7 @@ export default function App() {
             </div>
           </CardHeader>
           <CardContent
-            className="space-y-4 pb-5 pt-0 md:space-y-5 md:px-6 md:pb-8"
+            className="space-y-3 pb-4 pt-0 md:space-y-4 md:px-6 md:pb-6"
             onContextMenu={(e) => e.preventDefault()}
           >
             {selectedId && selectedIsPaired ? (
@@ -163,82 +243,60 @@ export default function App() {
               </div>
             ) : null}
 
-            <div className="mx-auto w-full max-w-sm">
-              <div className="rounded-2xl bg-muted/25 p-3 ring-1 ring-border/50 md:p-4">
-                <div className="mx-auto grid w-full max-w-[13.5rem] grid-cols-3 gap-1.5 md:max-w-[14rem] md:gap-2">
-                  <div />
-                  <RemoteBtn
-                    label={t("card.up")}
-                    command="up"
-                    disabled={!selectedId}
-                    push={push}
-                    title={t("card.titleDpad")}
-                    icon={
-                      <ChevronUp
-                        className="size-6 opacity-90"
-                        strokeWidth={2.25}
-                      />
-                    }
-                  />
-                  <div />
-                  <RemoteBtn
-                    label={t("card.left")}
-                    command="left"
-                    disabled={!selectedId}
-                    push={push}
-                    title={t("card.titleDpad")}
-                    icon={
-                      <ChevronLeft
-                        className="size-6 opacity-90"
-                        strokeWidth={2.25}
-                      />
-                    }
-                  />
-                  <div className="flex items-center justify-center">
-                    <RemoteBtn
-                      label={t("card.select")}
-                      emphasis
-                      command="select"
+            <div className="mx-auto w-full max-w-none md:max-w-sm">
+              <div className="md:hidden">
+                {mobileNavMode === "touchpad" ? (
+                  <div className="relative">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      className={MOBILE_MODE_TOGGLE_CLASS}
+                      onClick={() => setMobileNavMode("dpad")}
+                      title={t("card.switchToButtons")}
+                      aria-label={t("card.switchToButtonsAria")}
+                    >
+                      <Move className="size-4 opacity-90" />
+                    </Button>
+                    <RemoteTouchPad
+                      deviceId={selectedId ?? ""}
                       disabled={!selectedId}
-                      push={push}
-                      title={t("card.titleDpad")}
+                      showHint={false}
+                      showClickButtons={false}
+                      padClassName="max-w-none min-h-[13rem] w-full rounded-2xl border-border/70 bg-muted/25 ring-1 ring-border/50 aspect-[16/10]"
                     />
                   </div>
-                  <RemoteBtn
-                    label={t("card.right")}
-                    command="right"
-                    disabled={!selectedId}
-                    push={push}
-                    title={t("card.titleDpad")}
-                    icon={
-                      <ChevronRight
-                        className="size-6 opacity-90"
-                        strokeWidth={2.25}
+                ) : (
+                  <div className="relative">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      className={MOBILE_MODE_TOGGLE_CLASS}
+                      onClick={() => setMobileNavMode("touchpad")}
+                      title={t("card.switchToTouchpad")}
+                      aria-label={t("card.switchToTouchpadAria")}
+                    >
+                      <Hand className="size-4 opacity-90" strokeWidth={2} />
+                    </Button>
+                    <div className="rounded-2xl bg-muted/25 p-3 ring-1 ring-border/50">
+                      <DpadGrid
+                        selectedId={selectedId}
+                        push={push}
+                        t={t}
                       />
-                    }
-                  />
-                  <div />
-                  <RemoteBtn
-                    label={t("card.down")}
-                    command="down"
-                    disabled={!selectedId}
-                    push={push}
-                    title={t("card.titleDpad")}
-                    icon={
-                      <ChevronDown
-                        className="size-6 opacity-90"
-                        strokeWidth={2.25}
-                      />
-                    }
-                  />
-                  <div />
-                </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="hidden rounded-2xl bg-muted/25 p-3 ring-1 ring-border/50 md:block md:p-3">
+                <DpadGrid selectedId={selectedId} push={push} t={t} />
               </div>
             </div>
 
             <Separator className="bg-border/60" />
 
-            <div className="grid grid-cols-3 gap-2.5 md:mx-auto md:max-w-md md:gap-3">
+            <div className="grid grid-cols-3 gap-2 md:mx-auto md:max-w-md md:gap-2.5">
               <HoldableActionButton
                 command="menu"
                 push={push}
@@ -280,7 +338,7 @@ export default function App() {
 
             <Separator className="bg-border/60" />
 
-            <div className="mx-auto flex max-w-xs items-center justify-center gap-3 md:max-w-sm md:gap-4">
+            <div className="mx-auto flex w-full max-w-md flex-wrap items-center justify-center gap-2 md:max-w-xl md:gap-3">
               <Button
                 variant="secondary"
                 type="button"
@@ -290,10 +348,10 @@ export default function App() {
                 className={cn(
                   REMOTE_KEY_BASE,
                   "active:bg-secondary active:text-secondary-foreground",
-                  "size-12 shrink-0 rounded-xl md:size-9 md:rounded-lg",
+                  "size-10 shrink-0 touch-manipulation rounded-lg md:size-9",
                 )}
               >
-                <Volume1 className="size-6 md:size-5" />
+                <Volume1 className="size-5" />
               </Button>
               <Button
                 variant="secondary"
@@ -304,10 +362,10 @@ export default function App() {
                 className={cn(
                   REMOTE_KEY_BASE,
                   "active:bg-secondary active:text-secondary-foreground",
-                  "size-12 shrink-0 rounded-xl md:size-9 md:rounded-lg",
+                  "size-10 shrink-0 touch-manipulation rounded-lg md:size-9",
                 )}
               >
-                <Volume2 className="size-6 md:size-5" />
+                <Volume2 className="size-5" />
               </Button>
               <Button
                 variant="ghost"
@@ -318,10 +376,10 @@ export default function App() {
                 className={cn(
                   REMOTE_KEY_BASE,
                   "active:bg-muted/60 active:text-foreground",
-                  "size-12 shrink-0 rounded-xl md:size-9 md:rounded-lg",
+                  "size-10 shrink-0 touch-manipulation rounded-lg md:size-9",
                 )}
               >
-                <ChevronsLeft className="size-6 md:size-5" />
+                <ChevronsLeft className="size-5" />
               </Button>
               <Button
                 variant="ghost"
@@ -332,15 +390,19 @@ export default function App() {
                 className={cn(
                   REMOTE_KEY_BASE,
                   "active:bg-muted/60 active:text-foreground",
-                  "size-12 shrink-0 rounded-xl md:size-9 md:rounded-lg",
+                  "size-10 shrink-0 touch-manipulation rounded-lg md:size-9",
                 )}
               >
-                <ChevronsRight className="size-6 md:size-5" />
+                <ChevronsRight className="size-5" />
               </Button>
             </div>
           </CardContent>
         </Card>
       </main>
+
+      {selectedId && selectedIsPaired ? (
+        <KeyboardAutoDialog deviceId={selectedId} enabled />
+      ) : null}
 
       <PairDialog
         open={pairOpen}

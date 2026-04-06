@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/main.py .
+COPY backend/atv_web ./atv_web
 COPY --from=frontend /src/frontend/dist ./static
 
 ENV ATV_STATIC_DIR=/app/static

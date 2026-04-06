@@ -182,3 +182,162 @@ export function playingArtworkUrl(
 ): string {
   return `/api/devices/${encodeURIComponent(identifier)}/playing/artwork?w=${widthPx}&v=${cacheKey}`
 }
+
+export type AtvDeviceInfo = {
+  operating_system: string
+  version: string | null
+  build_number: string | null
+  model: string
+  model_str: string
+  raw_model: string | null
+  mac: string | null
+  output_device_id: string | null
+}
+
+export async function fetchDeviceInfo(
+  identifier: string,
+): Promise<AtvDeviceInfo> {
+  const res = await fetch(
+    `/api/devices/${encodeURIComponent(identifier)}/device-info`,
+  )
+  if (!res.ok) throw new Error(await parseError(res))
+  return res.json() as Promise<AtvDeviceInfo>
+}
+
+export type AtvFeatureRow = {
+  name: string
+  state: string
+  options: Record<string, unknown>
+}
+
+export async function fetchDeviceFeatures(
+  identifier: string,
+  opts?: { includeUnsupported?: boolean },
+): Promise<AtvFeatureRow[]> {
+  const q =
+    opts?.includeUnsupported === true ? "?include_unsupported=true" : ""
+  const res = await fetch(
+    `/api/devices/${encodeURIComponent(identifier)}/features${q}`,
+  )
+  if (!res.ok) throw new Error(await parseError(res))
+  const data = (await res.json()) as { features: AtvFeatureRow[] }
+  return data.features
+}
+
+export type AtvKeyboardState = {
+  text_focus_state: string
+  text: string | null
+}
+
+export async function fetchKeyboardState(
+  identifier: string,
+): Promise<AtvKeyboardState> {
+  const res = await fetch(
+    `/api/devices/${encodeURIComponent(identifier)}/keyboard`,
+  )
+  if (!res.ok) throw new Error(await parseError(res))
+  return res.json() as Promise<AtvKeyboardState>
+}
+
+/** 键盘焦点与文本（与 GET /keyboard 同形）；用于 SSE 自动弹出输入框。 */
+export function keyboardStreamUrl(identifier: string): string {
+  return `/api/devices/${encodeURIComponent(identifier)}/keyboard/stream`
+}
+
+export async function keyboardRemoteOp(
+  identifier: string,
+  body: { op: "clear" | "append" | "set"; text?: string | null },
+): Promise<AtvKeyboardState> {
+  const res = await fetch(
+    `/api/devices/${encodeURIComponent(identifier)}/keyboard`,
+    {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  )
+  if (!res.ok) throw new Error(await parseError(res))
+  return res.json() as Promise<AtvKeyboardState>
+}
+
+export async function touchSwipeRemote(
+  identifier: string,
+  body: {
+    start_x: number
+    start_y: number
+    end_x: number
+    end_y: number
+    duration_ms: number
+  },
+): Promise<void> {
+  const res = await fetch(
+    `/api/devices/${encodeURIComponent(identifier)}/touch/swipe`,
+    {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  )
+  if (!res.ok) throw new Error(await parseError(res))
+}
+
+export async function touchActionRemote(
+  identifier: string,
+  body: { x: number; y: number; mode: number },
+): Promise<void> {
+  const res = await fetch(
+    `/api/devices/${encodeURIComponent(identifier)}/touch/action`,
+    {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  )
+  if (!res.ok) throw new Error(await parseError(res))
+}
+
+export async function touchClickRemote(
+  identifier: string,
+  body: { action: "single" | "double" | "hold" },
+): Promise<void> {
+  const res = await fetch(
+    `/api/devices/${encodeURIComponent(identifier)}/touch/click`,
+    {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  )
+  if (!res.ok) throw new Error(await parseError(res))
+}
+
+export type AtvUserAccount = {
+  name: string | null
+  identifier: string
+}
+
+export async function fetchUserAccounts(
+  identifier: string,
+): Promise<AtvUserAccount[]> {
+  const res = await fetch(
+    `/api/devices/${encodeURIComponent(identifier)}/accounts`,
+  )
+  if (!res.ok) throw new Error(await parseError(res))
+  const data = (await res.json()) as { accounts: AtvUserAccount[] }
+  return data.accounts
+}
+
+export async function switchUserAccount(
+  identifier: string,
+  accountId: string,
+): Promise<void> {
+  const res = await fetch(
+    `/api/devices/${encodeURIComponent(identifier)}/accounts/switch`,
+    {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({ account_id: accountId }),
+    },
+  )
+  if (!res.ok) throw new Error(await parseError(res))
+}
