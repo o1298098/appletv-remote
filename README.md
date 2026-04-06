@@ -1,6 +1,6 @@
 # Apple TV Remote · Web UI
 
-Web client for controlling Apple TV on your LAN: device scan and pairing, D-pad and media keys, **English / Chinese UI**, and **light / dark / system** theme. Production builds are served by the FastAPI backend in the same process; during development, Vite proxies `/api` to a local server.
+Web client for controlling Apple TV on your LAN. In production the FastAPI backend serves the built SPA in the same process; 
 
 ![UI preview](frontend/docs/preview.png)
 
