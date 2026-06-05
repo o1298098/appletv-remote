@@ -13,7 +13,7 @@ FROM python:3.12-slim-bookworm
 WORKDIR /app
 
 COPY backend/requirements.txt .
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential git \
     && pip install --no-cache-dir -r requirements.txt \
     && apt-get purge -y build-essential \
     && apt-get autoremove -y --purge \

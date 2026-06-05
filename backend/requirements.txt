@@ -1,5 +1,8 @@
 # Windows：miniaudio 对 3.13+ 常无预编译 wheel，易触发 MSVC 编译错误。
 # 建议用 Python 3.12 虚拟环境，或安装 Visual C++ Build Tools。详见 WINDOWS_SETUP.txt
-pyatv>=0.14.0
+#
+# tvOS 26.x 需要 pyatv master（含 TVRCSessionStart 修复，见 postlund/pyatv#2855）。
+# 待 PyPI 发布含该修复的版本后，可改回：pyatv>=0.18.0
+pyatv @ git+https://github.com/postlund/pyatv.git@9177803dec6a165d4610d5d63fe09562820fccdb
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
